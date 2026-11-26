@@ -3,13 +3,13 @@ name: booksql-accounting-context
 description: Use when interpreting BookSQL accounting tables and source fields.
 ---
 
-# BookSQL accounting context — descriptive glossary only
+# BookSQL accounting context — glossary plus D-only text matching
 
-This skill is the proposed D-only Context Layer for BookSQL. It summarizes the dataset's documented table roles and the verified SQLite schema. It does **not** define accounting policy, derived metrics, sign conventions, date cutoffs, or business rules. Do not turn a field label into a formula.
+This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: case-insensitive matching for user-provided text labels. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. Do not turn a field label into a formula.
 
 ## Data source and grain
 
-BookSQL's `accounting.sqlite` contains records for multiple businesses. `master_txn_table` is the transaction-level table documented by the dataset README as the main table of business transaction records. Use Cube metadata and the question to select measures and dimensions. The skill does not add a filter, join, aggregation, or adjustment.
+BookSQL's `accounting.sqlite` contains records for multiple businesses. The physical `master_txn_table` is at accounting-line grain: a `(businessID, Transaction_ID)` can appear on multiple rows. In the current Cube model, `Transactions` represents source accounting lines and `AccountingTransactions` represents one row per composite transaction key. Use live Cube metadata to select the appropriate grain and measure. The transaction-grain cube deduplicates `Amount` and `Open_balance`, and sums `Quantity` within each transaction. Do not describe the physical table as one row per transaction.
 
 ## Physical tables
 
@@ -23,6 +23,14 @@ BookSQL's `accounting.sqlite` contains records for multiple businesses. `master_
 
 Use these exact physical names only in B's SQLite MCP. In D, use only the logical members exposed by Cube metadata.
 
+## Approved D-only case-insensitive matching
+
+This is the sole D-specific matching rule. When a prompt provides a textual label for a Cube string dimension (for example vendor, customer, account, product/service, or payment method), normalize only the letter case of the user-provided value to lowercase, preserve its spaces and punctuation, and use an exact `equals` filter on the semantically appropriate Cube member returned by live metadata. Do not use physical column names or direct SQL in D. Keep displayed source labels unchanged; this rule changes only how the filter value is matched, not the measure, aggregation, join, date, or accounting interpretation.
+
+The relevant label fields in the current BookSQL SQLite data were checked and are stored in lowercase. On the current Cube v1.7.24 + SQLite path, the Cube `contains` filter generated `ILIKE` and failed with a SQLite syntax error, so do not use `contains` as a case-insensitive workaround. If exact equality with the normalized value returns no rows, report that; do not fall back to another data route or broaden the filter silently. If a future source contains mixed-case stored labels, revalidate this policy rather than assuming lowercasing the prompt alone is sufficient.
+
+This D-only rule can intentionally return a result where the unchanged, case-sensitive gold SQL returns no rows. Preserve the benchmark prompt and gold SQL; report such a result as the D case-insensitive treatment, not as an exact match to the literal gold execution.
+
 ## Interpretation safeguards
 
 - `Amount`, `Credit`, `Debit`, `Open_balance`, entity `Balance`, `Rate`, and `Billing_rate` are distinct stored fields. Their labels alone do not establish equivalence, sign convention, accounting treatment, or a formula. Use the Cube measure definition and question; do not add or net them unless the model/question explicitly supports it.
@@ -33,4 +41,4 @@ Use these exact physical names only in B's SQLite MCP. In D, use only the logica
 
 ## Layer boundary
 
-This is a descriptive schema/domain glossary only. It introduces no business calculation or exception policy. Preserve original benchmark prompts and gold queries unchanged. This draft should be reviewed and frozen by the researcher before formal A/B/C/D evaluation.
+This layer adds case-insensitive matching of text labels and otherwise remains descriptive. It introduces no accounting calculation or exception policy. Preserve original benchmark prompts and gold queries unchanged; document any answer that differs from literal gold execution because of case normalization. Freeze the exact D context revision before formal A/B/C/D evaluation.
