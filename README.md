@@ -6,9 +6,10 @@ This repository is the Nao Multi-project context for BookSQL scenario **D**.
 
 - No direct SQLite or native database connector is declared.
 - BookSQL data is accessed only through `cube_semantic` and the dedicated Cube BookSQL MCP.
-- The D-only `booksql-accounting-context` skill is a descriptive glossary grounded in the dataset README and SQLite schema; it does not add accounting formulas or policies.
+- The D-only `booksql-accounting-context` skill corrects the fact-table grain description and adds one approved treatment: case-insensitive matching of user-provided text labels. It does not add accounting formulas, joins, or sign policies.
 - `decimal_calculator.calculate` is arithmetic-only over values already returned by Cube.
 - The context explicitly avoids Contoso rules and unsupported assumptions about Amount/Credit/Debit, joins, or business behavior.
+- For text filters, D lowercases only the user-provided label and uses exact equality against the appropriate Cube string member; it does not change returned labels or numeric/date semantics.
 
 ## Project mapping
 
@@ -18,4 +19,4 @@ This repository is the Nao Multi-project context for BookSQL scenario **D**.
 
 ## Methodology status
 
-This is a conservative draft of the previously unspecified BookSQL D treatment. Review and freeze it before formal A/B/C/D runs; do not treat the D condition as methodologically approved until the researcher confirms this context layer.
+Hector approved case-insensitive matching of text labels as the D-only treatment. The original prompts and gold SQL remain unchanged; if case normalization yields rows where literal gold SQL returns none, record that as a treatment effect, not an exact gold match. Freeze the updated D context before formal A/B/C/D runs.
