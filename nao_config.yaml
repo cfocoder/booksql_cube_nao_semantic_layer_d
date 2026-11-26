@@ -1,0 +1,19 @@
+# Formal scenario D: Cube MCP plus a Nao Context Layer business skill.
+# No native PostgreSQL connection is allowed in this project.
+project_name: tesis-condition-d
+llm:
+  providers:
+    - provider: openai
+      api_key: "{{ env('OPENAI_API_KEY') }}"
+      base_url: "{{ env('OPENAI_BASE_URL') }}"
+      models:
+        - id: gpt-6-luna
+          name: OpenAI - GPT-6 Luna
+          default: true
+
+    - provider: openrouter
+      api_key: "{{ env('DEEPSEEK_API_KEY') }}"
+      base_url: "https://api.deepseek.com"
+      models:
+        - id: deepseek-flash
+          name: DeepSeek Flash
