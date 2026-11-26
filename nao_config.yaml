@@ -1,6 +1,6 @@
-# Formal scenario D: Cube MCP plus a Nao Context Layer business skill.
-# No native PostgreSQL connection is allowed in this project.
-project_name: tesis-condition-d
+# BookSQL scenario D: Cube BookSQL plus a descriptive accounting context layer.
+# Runtime model credentials are supplied outside Git.
+project_name: booksql-condition-d
 llm:
   providers:
     - provider: openai
