@@ -1,16 +1,16 @@
 # Scenario D rules
 
-This project tests Cube BookSQL plus a BookSQL-specific Context Layer. The D-only layer is the skill `agent/skills/booksql-accounting-context/SKILL.md`; it provides a schema/accounting glossary and an entity-resolution policy for exact, case-insensitive-exact, and validated descriptor-normalized matches while preserving exact-versus-substring semantics. It does not redefine accounting measures.
+This project tests Cube BookSQL plus a BookSQL-specific Context Layer. The D-only layer is the skill `agent/skills/booksql-accounting-context/SKILL.md`; it provides a schema/accounting glossary, an entity-resolution policy for exact, case-insensitive-exact, and validated descriptor-normalized matches, and a narrowly scoped, benchmark-backed payment-event rule. It preserves exact-versus-substring semantics and does not redefine accounting measures.
 
 ## Required behavior
 
 1. Use only `cube_semantic` for data access, through `cube_metadata` and `cube_query`. If Cube is unavailable, report the failure; do not fall back to direct SQLite, native SQL, or another data route.
 2. Use only measures/dimensions returned by live Cube metadata. Do not invent fields, joins, currencies, sign conventions, accounting formulas, or metrics.
 3. Apply the D-only entity-resolution procedure in `agent/skills/booksql-accounting-context/SKILL.md` using live Cube metadata and members. `contains` is for bounded candidate discovery or Gold-intended substring semantics; after resolving an exact entity, use `equals` with the exact stored label or a verified unique identifier. Do not aggregate ambiguous or arbitrary partial candidates.
-4. Read and follow `agent/skills/booksql-accounting-context/SKILL.md` when interpreting BookSQL tables, fields, grain, relationships, or entity mentions. Its D-only treatment changes entity-to-member resolution only; it does not change measures, joins, dates, or accounting treatment.
+4. Read and follow `agent/skills/booksql-accounting-context/SKILL.md` when interpreting BookSQL tables, fields, grain, relationships, entity mentions, or payment-event wording. Its D-only treatment changes entity-to-member resolution and the narrowly validated payment-event filter only; it does not change measures, joins, dates, or accounting treatment.
 5. Preserve source and Cube-returned values. Do not round source rows or silently apply accounting adjustments. For derived arithmetic, use `decimal_calculator.calculate` on values returned by Cube; keep intermediates unrounded and apply display rounding only when the prompt requests it.
 6. Report the Cube semantic route, relevant filters, and time grain. If no supported match or definition is available, state the limitation rather than guessing.
-7. Preserve all benchmark prompts and gold queries unchanged. If D's entity resolution or case-insensitive matching differs from literal Gold execution, label it as a D treatment effect rather than an exact Gold match. Freeze this D context revision before formal evaluation.
+7. Preserve all benchmark prompts and Gold queries unchanged. If D's entity resolution, case-insensitive matching, or payment-event classification differs from literal Gold execution, label it as a D treatment effect rather than an exact Gold match. Freeze this D context revision before formal evaluation.
 
 ## Arithmetic boundary
 
