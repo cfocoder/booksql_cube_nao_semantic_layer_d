@@ -3,9 +3,9 @@ name: booksql-accounting-context
 description: Use when interpreting BookSQL accounting tables and source fields.
 ---
 
-# BookSQL accounting context — glossary plus D-only text matching
+# BookSQL accounting context — glossary plus D-only entity resolution
 
-This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: case-insensitive text matching that preserves exact-versus-substring semantics. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. For benchmark temporal and fiscal-year interpretation, follow the shared policy in the project's `RULES.md`. Do not turn a field label into a formula.
+This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: evidence-based entity resolution that preserves exact-versus-substring semantics, including the previously validated case-insensitive treatment. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. For benchmark temporal and fiscal-year interpretation, follow the shared policy in the project's `RULES.md`. Do not turn a field label into a formula.
 
 ## Data source and grain
 
@@ -23,13 +23,31 @@ BookSQL's `accounting.sqlite` contains records for multiple businesses. The phys
 
 Use these exact physical names only in B's SQLite MCP. In D, use only the logical members exposed by Cube metadata.
 
-## Approved D-only case-insensitive text matching
+## D-only entity resolution and text matching
 
-This is the sole D-specific matching rule. Preserve the benchmark's intended exact-versus-substring semantics and use only Cube members returned by live metadata. For substring semantics (for example, an `instr`-style match on `Account`), use Cube's native `contains` filter on the appropriate string member with the user's original text. For exact label equality when casing may differ, first run a bounded candidate-discovery query selecting only that string member and filtering it with `contains` using the original text. Inspect the complete set of distinct returned labels. Use `contains` in the final measure query only if every candidate is an exact case variant of the requested full label; this permits case variants without including longer or partial labels. If there is no exact candidate, any partial/longer candidate, or possible result truncation, report the limitation/ambiguity instead of aggregating a broader set. The validated BookSQL deployment uses Cube Core v1.8.32 with `CUBEJS_TESSERACT_SQL_PLANNER=false`; a Langfuse trace confirmed that `contains` succeeded, but did not expose generated SQL. Do not claim a specific SQL translation; revalidate after any version, planner, or source change. Preserve the original prompt value; do not lowercase it or use physical column names, direct SQL, or invented Cube members. Keep displayed source labels unchanged; this rule does not alter measures, aggregation, joins, dates, or accounting interpretation.
+Apply this procedure only to entity labels that the question asks to match. Preserve the original entity phrase, question, and Gold SQL. Use live Cube metadata; never invent members, IDs, relationships, or entity-type fields. Determine whether the question refers to a customer or vendor from its wording and context, and search the corresponding Cube member. If the role is unclear, inspect customer and vendor candidates separately and do not merge them.
 
-Do not assume non-ASCII case variants behave the same as the tested labels without validating them on the active Cube path. If `contains` fails on the active Cube path, report the actual error and stop; do not switch data routes or silently rewrite the filter. Revalidate the adapter behavior if the Cube version or source changes.
+### Resolution order
 
-This D-only rule can intentionally return a result where the unchanged, case-sensitive gold SQL returns no rows. Preserve the benchmark prompt and gold SQL; report such a result as the D case-insensitive text-matching treatment, not as an exact match to the literal gold execution.
+1. **Exact label first.** Query the relevant member with Cube `equals` using the full entity phrase as written. If one stored label or verified unique identifier matches, use it.
+2. **Case-only variation second.** If no exact match exists, run a bounded candidate-discovery query with `contains` on the relevant member. Compare each complete stored label—not just the matching substring—to the full requested entity phrase case-insensitively. Accept only exact case variants of the full phrase. For the final equality query, use `equals` with the exact stored label(s) returned by Cube, or a verified unique identifier; do not use `contains` as a substitute for equality.
+3. **Validated descriptor normalization third.** Only after exact and case-only resolution fail, check the explicit descriptor allowlist below. Initially, `partnership` is the only enabled descriptor. Remove it only when it is a trailing descriptor in the natural-language entity phrase, not when it is part of a quoted/stored-name request or another filter. Preserve both the original phrase and normalized base name. Search candidates with `contains`, but retain only complete stored labels that equal the normalized base name ignoring case; longer/partial labels are never eligible. Resolve only if the retained values represent one logical entity under the existing case-only policy and no live identifier/context conflict exists. Use `equals` with the selected stored label(s) or verified unique identifier in the final query. Treat `partnership` as a phrase descriptor, not an assumed Cube dimension or filter.
+4. **All other descriptors remain disabled.** Do not strip titles or legal-form suffixes such as `Inc.`, `LLC`, `Ltd.`, or `S.A. de C.V.` until the same normalization is independently validated against the benchmark and explicitly added to the allowlist. Preserve them as part of the phrase or report the entity as unresolved.
+
+The validation split supports the `partnership` rule: all 471 questions containing that trailing descriptor have Gold customer filters using the preceding name without the descriptor. This is benchmark-wide evidence, not a customer-specific exception. Keep the rule limited to that terminal descriptor until further validation.
+
+### Candidate safety and final filters
+
+- `contains` is for candidate discovery; it is also allowed in the final query only when the benchmark question/Gold has intentional substring semantics (for example, `instr` or `LIKE '%phrase%'`). Preserve that distinction.
+- Do not accept a longer or partial label as an exact entity match. After descriptor normalization, compare the full candidate label to the entire normalized name. Never combine distinct labels just because they share a substring.
+- If multiple plausible entities remain, disambiguate only with a unique identifier or other context actually exposed by Cube and supported by the question. If they remain ambiguous, or the candidate set may be truncated (including hitting the result cap), stop and report/ask rather than guessing or aggregating. A unique full-label match can be used even when no identifier is exposed.
+- If Cube exposes a stable entity identifier or `businessID` needed to distinguish otherwise identical labels, use only the live member returned by metadata. Do not assume `customerName` or `vendorName` is globally unique.
+- Use Cube's literal stored label in final `equals` filters; do not lowercase source values, write raw SQL, switch data routes, or claim a particular SQL translation without query-log evidence.
+- Do not assume non-ASCII case variants behave identically to the tested labels; validate before claiming broader Unicode case-folding support. If candidate discovery fails, report the actual tool error and stop.
+
+### Langfuse resolution audit
+
+For every entity lookup, include a short, factual audit in the final response so Langfuse captures the resolution alongside the `cube_query` observations: original phrase, candidate labels actually returned, normalization (`none` if none), selected stored label/identifier (`none` if unresolved), method (`exact`, `case-insensitive exact`, `descriptor-normalized exact`, or `ambiguous`), and whether resolution was unique. Do not expose hidden reasoning, invent candidates, or claim a final query ran unless Langfuse shows its final filter and returned result.
 
 ## Interpretation safeguards
 
@@ -41,4 +59,4 @@ This D-only rule can intentionally return a result where the unchanged, case-sen
 
 ## Layer boundary
 
-This layer adds case-insensitive text matching while preserving each question's exact-versus-substring semantics; otherwise it remains descriptive. It introduces no accounting calculation or exception policy. Preserve original benchmark prompts and gold queries unchanged; document any answer that differs from literal gold execution because of the D-only matching treatment. Freeze the exact D context revision before formal A/B/C/D evaluation.
+This layer adds evidence-based entity resolution while preserving each question's exact-versus-substring semantics; otherwise it remains descriptive. It introduces no accounting calculation or exception policy. Preserve original benchmark prompts and Gold queries unchanged; document any answer that differs from literal Gold execution because of D-only entity resolution or case handling. Freeze the exact D context revision before formal A/B/C/D evaluation.
