@@ -3,13 +3,26 @@ name: booksql-accounting-context
 description: Use when interpreting BookSQL accounting tables and source fields.
 ---
 
-# BookSQL accounting context — glossary plus D-only entity resolution
+# BookSQL accounting context — measures, grain, and D interpretation
 
-This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, defines evidence-based entity resolution that preserves exact-versus-substring semantics, and documents one narrowly scoped payment-event interpretation backed by dev Gold evidence. It does **not** define accounting formulas, sign conventions, date cutoffs, or other unsupported business rules. For benchmark temporal and fiscal-year interpretation, follow the shared policy in the project's `RULES.md`. Do not turn a field label into a formula.
+This skill is the D-only Context Layer for BookSQL. It summarizes verified table roles and grain, maps accounting intents to explicit measures in the shared Cube semantic layer, and defines evidence-based entity resolution that preserves exact-versus-substring semantics. It also documents the narrowly scoped customer-payment event interpretation. These measure choices use the shared model available to C and D; they do not authorize ad hoc formulas, joins, date cutoffs, or changes to benchmark questions/Gold. For temporal and fiscal-year interpretation, follow the shared policy in the project's `RULES.md`.
 
 ## Data source and grain
 
-BookSQL's `accounting.sqlite` contains records for multiple businesses. The physical `master_txn_table` is at accounting-line grain: a `(businessID, Transaction_ID)` can appear on multiple rows. In the current Cube model, `Transactions` represents source accounting lines and `AccountingTransactions` represents one row per composite transaction key. Use live Cube metadata to select the appropriate grain and measure. The transaction-grain cube deduplicates `Amount` and `Open_balance`, and sums `Quantity` within each transaction. Do not describe the physical table as one row per transaction.
+BookSQL's `accounting.sqlite` contains records for multiple businesses. The physical `master_txn_table` is at accounting-line grain: a `(businessID, Transaction_ID)` can appear on multiple rows. In the shared Cube model, `Transactions` represents source accounting lines, `AccountingTransactions` represents one row per composite transaction key, and `ClassifiedAccountingLines` maps account type by business plus normalized account label without a fan-out join. Use live Cube metadata and the matching curated view to select the appropriate grain. `Amount` and `Open_balance` are deduplicated at transaction grain; `Quantity` is summed within each transaction. Do not describe the physical table as one row per transaction.
+
+## Measure and grain selection
+
+Use only the members returned by live Cube metadata. The names below are expected in the current shared model; if a member is absent, do not invent it—report the limitation and use only a verified equivalent.
+
+- **Unpaid/outstanding invoices:** use `BookSQLTransactionAnalytics.unpaidInvoices` with transaction-grain `count`; it means source type `invoice` and `Open_balance > 0`. For the balance amount, use `totalOpenBalance` with the same segment. Do not use `AR_paid` or `AP_paid` as a substitute when they conflict with the balance.
+- **Expense/spend:** use `BookSQLClassifiedAccountingLines.classifiedExpenseDebit` (or `expenseLines`) for positive `Debit` on a uniquely classified `expense`, `expenses`, or `other expense` account. This is an account-side expense measure, not transaction `Amount`, `totalTransactionAmount`, or proof of cash-flow spend. For a monthly result, use `transactionDate` at month grain and the relevant vendor/entity filter.
+- **Recognized revenue:** use `recognizedRevenueCredit` (or `incomeLines`) for positive `Credit` on a uniquely classified `income` or `other income` account. Do not substitute invoice `Amount` or `totalInvoiceAmount`; invoice value and income-side credits answer different questions. Use `totalInvoiceAmount` only when the question explicitly asks for invoice totals.
+- **Classification completeness:** in the same query slice, inspect `accountClassificationIssueLineCount` and `unresolvedDebit`/`unresolvedCredit`. A nonzero issue count or unresolved amount means the classified subtotal may omit relevant lines. Do not assign ambiguous or unmapped lines to expense/revenue; label the classified result incomplete when the unresolved slice could affect the requested metric.
+- **Customer payment received:** only for wording that clearly asks about receiving a payment from a customer, use the `paymentEvents` segment or `customerPaymentEventCount`, alongside the independently resolved customer and date. A payment method is not a payment event, and this rule does not establish vendor-payment direction.
+- **Completeness of comparisons:** a top-N response is not a complete customer comparison. If Cube returns a capped ranking or partial member list, report its limit explicitly; use supported pagination or state that the full comparison was not returned.
+
+These members are shared by C and D. The D context selects among their documented meanings; it does not change their definitions or the official Gold queries.
 
 ## Physical tables
 
@@ -30,7 +43,7 @@ Apply this procedure only to entity labels that the question asks to match. Pres
 ### Resolution order
 
 1. **Exact label first.** Query the relevant member with Cube `equals` using the full entity phrase as written. If one stored label or verified unique identifier matches, use it.
-2. **Case-only variation second.** If no exact match exists, run a bounded candidate-discovery query with `contains` on the relevant member. Compare each complete stored label—not just the matching substring—to the full requested entity phrase case-insensitively. Accept only exact case variants of the full phrase. For the final equality query, use `equals` with the exact stored label(s) returned by Cube, or a verified unique identifier; do not use `contains` as a substitute for equality.
+2. **Case-only variation second.** If live metadata exposes the corresponding `customerNameNormalized`, `vendorNameNormalized`, `productServiceNormalized`, or `accountNameNormalized` member, use `equals` against the requested label after lowercase-and-trim normalization, then verify the full original stored label before accepting the candidate. These normalized members are exact case/outer-whitespace keys, not display labels or fuzzy matches. If no normalized member exists, use bounded candidate discovery with `contains`, compare complete stored labels case-insensitively, and use `equals` with the exact stored label for the final query.
 3. **Validated descriptor normalization third.** Only after exact and case-only resolution fail, check the explicit descriptor allowlist below. Initially, `partnership` is the only enabled descriptor. Remove it only when it is a trailing descriptor in the natural-language entity phrase, not when it is part of a quoted/stored-name request or another filter. Preserve both the original phrase and normalized base name. Search candidates with `contains`, but retain only complete stored labels that equal the normalized base name ignoring case; longer/partial labels are never eligible. Resolve only if the retained values represent one logical entity under the existing case-only policy and no live identifier/context conflict exists. Use `equals` with the selected stored label(s) or verified unique identifier in the final query. Treat `partnership` as a phrase descriptor, not an assumed Cube dimension or filter.
 4. **All other descriptors remain disabled.** Do not strip titles or legal-form suffixes such as `Inc.`, `LLC`, `Ltd.`, or `S.A. de C.V.` until the same normalization is independently validated against the benchmark and explicitly added to the allowlist. Preserve them as part of the phrase or report the entity as unresolved.
 
@@ -42,7 +55,7 @@ The validation split supports the `partnership` rule: all 471 questions containi
 - Do not accept a longer or partial label as an exact entity match. After descriptor normalization, compare the full candidate label to the entire normalized name. Never combine distinct labels just because they share a substring.
 - If multiple plausible entities remain, disambiguate only with a unique identifier or other context actually exposed by Cube and supported by the question. If they remain ambiguous, or the candidate set may be truncated (including hitting the result cap), stop and report/ask rather than guessing or aggregating. A unique full-label match can be used even when no identifier is exposed.
 - If Cube exposes a stable entity identifier or `businessID` needed to distinguish otherwise identical labels, use only the live member returned by metadata. Do not assume `customerName` or `vendorName` is globally unique.
-- Use Cube's literal stored label in final `equals` filters; do not lowercase source values, write raw SQL, switch data routes, or claim a particular SQL translation without query-log evidence.
+- Use the documented normalized member with final `equals` only when live metadata exposes it; otherwise use Cube's literal stored label in final `equals` filters. Do not lowercase source values yourself, write raw SQL, switch data routes, or claim a particular SQL translation without query-log evidence.
 - Do not assume non-ASCII case variants behave identically to the tested labels; validate before claiming broader Unicode case-folding support. If candidate discovery fails, report the actual tool error and stop.
 
 ### Langfuse resolution audit
@@ -58,12 +71,13 @@ For every entity lookup, include a short, factual audit in the final response so
 
 ## Interpretation safeguards
 
-- `Amount`, `Credit`, `Debit`, `Open_balance`, entity `Balance`, `Rate`, and `Billing_rate` are distinct stored fields. Their labels alone do not establish equivalence, sign convention, accounting treatment, or a formula. Use the Cube measure definition and question; do not add or net them unless the model/question explicitly supports it.
-- `AR_paid`, `AP_paid`, and `Deleted` are source fields. Do not infer their value domain or business meaning beyond what the model exposes.
+- `Amount`, `Credit`, `Debit`, `Open_balance`, entity `Balance`, `Rate`, and `Billing_rate` are distinct stored fields. Use the explicit Cube measure definition; never substitute one for another based on wording alone.
+- `AR_paid`, `AP_paid`, and `Deleted` are source fields. Do not infer their value domain or business meaning beyond what the model exposes; positive `Open_balance` is the defined criterion for the `unpaidInvoices` segment.
+- Account types that conflict for the same business and normalized account label are marked `ambiguous`; missing mappings are `unmapped`. The classified expense/revenue measures exclude both. Never join chart-of-accounts rows directly to transaction lines without validating cardinality, because that can duplicate amounts.
 - The SQLite schema declares composite references from `master_txn_table` to several dimension tables. `businessID` has different declared SQLite types across tables (including `INTEGER` and `TEXT`), and identifier/name fields may not be unique. Do not invent joins or assume one-to-one cardinality; use only joins exposed by Cube and its metadata.
 - The physical table is named `products`; the dataset README describes the entity as products/services. Follow the physical Cube model, not a guessed table name.
 - Do not carry over Contoso's effective-business-day, customer-recency, customer-placeholder, product-pair, ranking, or monetary-rounding policies. BookSQL has no such policy in this context.
 
 ## Layer boundary
 
-This layer adds evidence-based entity resolution and a narrowly scoped, dev-Gold-backed filter for unambiguous received-payment questions while preserving exact-versus-substring semantics. It changes only interpretation and filter choice; it introduces no new measures, accounting calculations, joins, or sign policies. Preserve original benchmark prompts and Gold queries unchanged; document any answer that differs from literal Gold execution because of D-only entity resolution, case handling, or payment-event filtering. Freeze the exact D context revision before formal A/B/C/D evaluation.
+This layer adds evidence-based entity resolution and measure-selection guidance over the shared semantic model while preserving exact-versus-substring semantics. It introduces no new Cube measures, joins, or accounting calculations beyond those explicitly defined in the shared model. Preserve original benchmark prompts and Gold queries unchanged; document differences from literal Gold execution as treatment effects, not exact Gold matches. Freeze the exact D context revision before formal A/B/C/D evaluation.
