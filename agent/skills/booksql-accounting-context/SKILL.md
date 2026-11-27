@@ -5,7 +5,7 @@ description: Use when interpreting BookSQL accounting tables and source fields.
 
 # BookSQL accounting context — glossary plus D-only entity resolution
 
-This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: evidence-based entity resolution that preserves exact-versus-substring semantics, including the previously validated case-insensitive treatment. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. For benchmark temporal and fiscal-year interpretation, follow the shared policy in the project's `RULES.md`. Do not turn a field label into a formula.
+This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, defines evidence-based entity resolution that preserves exact-versus-substring semantics, and documents one narrowly scoped payment-event interpretation backed by dev Gold evidence. It does **not** define accounting formulas, sign conventions, date cutoffs, or other unsupported business rules. For benchmark temporal and fiscal-year interpretation, follow the shared policy in the project's `RULES.md`. Do not turn a field label into a formula.
 
 ## Data source and grain
 
@@ -49,6 +49,13 @@ The validation split supports the `partnership` rule: all 471 questions containi
 
 For every entity lookup, include a short, factual audit in the final response so Langfuse captures the resolution alongside the `cube_query` observations: original phrase, candidate labels actually returned, normalization (`none` if none), selected stored label/identifier (`none` if unresolved), method (`exact`, `case-insensitive exact`, `descriptor-normalized exact`, or `ambiguous`), and whether resolution was unique. Do not expose hidden reasoning, invent candidates, or claim a final query ran unless Langfuse shows its final filter and returned result.
 
+### Payment-event interpretation (D-only)
+
+- When the question unambiguously asks whether a payment was received from a customer (for example, the benchmark wording class “receive payment from”), treat `payment` as a transaction event type, not merely as an amount or paid-status flag. The dev split supports this mapping: all 471 questions in that wording class use `transaction_type = 'payment'` in Gold. If live Cube metadata exposes `AccountingTransactions.transactionType` (or its current equivalent), confirm the exact stored label and add a final `equals` filter for that label alongside the independently resolved customer and requested date filters. Do not use `contains` as the final type filter.
+- Do not infer a payment event from `totalTransactionAmount`, `AR_paid`, or `AP_paid` alone. Use the transaction-grain count or transaction identifier to establish whether matching payment events exist; do not aggregate unrelated transaction types to answer a payment-existence question.
+- Do not apply the `payment` type merely because the word appears. “Payment method” is a different request: all 606 dev Gold questions in that wording class use `transaction_type = 'sales receipt'` and ask about the payment-method field. Distinguish the transaction event from its payment method and follow the live Cube member plus the question's intent.
+- This evidence validates received-payment questions tied to a customer. Do not infer that an outbound payment to a vendor uses the same type, or infer direction from the type label alone. If the wording, entity role, Cube member, or exact stored type label is unclear or unavailable, report the limitation or ask rather than dropping the type condition or guessing.
+
 ## Interpretation safeguards
 
 - `Amount`, `Credit`, `Debit`, `Open_balance`, entity `Balance`, `Rate`, and `Billing_rate` are distinct stored fields. Their labels alone do not establish equivalence, sign convention, accounting treatment, or a formula. Use the Cube measure definition and question; do not add or net them unless the model/question explicitly supports it.
@@ -59,4 +66,4 @@ For every entity lookup, include a short, factual audit in the final response so
 
 ## Layer boundary
 
-This layer adds evidence-based entity resolution while preserving each question's exact-versus-substring semantics; otherwise it remains descriptive. It introduces no accounting calculation or exception policy. Preserve original benchmark prompts and Gold queries unchanged; document any answer that differs from literal Gold execution because of D-only entity resolution or case handling. Freeze the exact D context revision before formal A/B/C/D evaluation.
+This layer adds evidence-based entity resolution and a narrowly scoped, dev-Gold-backed filter for unambiguous received-payment questions while preserving exact-versus-substring semantics. It changes only interpretation and filter choice; it introduces no new measures, accounting calculations, joins, or sign policies. Preserve original benchmark prompts and Gold queries unchanged; document any answer that differs from literal Gold execution because of D-only entity resolution, case handling, or payment-event filtering. Freeze the exact D context revision before formal A/B/C/D evaluation.
