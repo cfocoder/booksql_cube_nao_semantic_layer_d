@@ -1,16 +1,19 @@
 # Scenario D rules
 
-This project tests Cube BookSQL plus a BookSQL-specific Context Layer. The D-only layer is the skill `agent/skills/booksql-accounting-context/SKILL.md`; it provides a schema/accounting glossary, an entity-resolution policy for exact, case-insensitive-exact, and validated descriptor-normalized matches, and a narrowly scoped, benchmark-backed payment-event rule. It preserves exact-versus-substring semantics and does not redefine accounting measures.
+This project tests Cube BookSQL plus a BookSQL-specific Context Layer. The D-only layer is the skill `agent/skills/booksql-accounting-context/SKILL.md`; it provides grain and measure-selection guidance for the shared semantic model, evidence-based entity resolution, and the narrowly scoped customer-payment event rule. Preserve exact-versus-substring semantics and use only documented measures from live Cube metadata.
 
 ## Required behavior
 
 1. Use only `cube_semantic` for data access, through `cube_metadata` and `cube_query`. If Cube is unavailable, report the failure; do not fall back to direct SQLite, native SQL, or another data route.
 2. Use only measures/dimensions returned by live Cube metadata. Do not invent fields, joins, currencies, sign conventions, accounting formulas, or metrics.
-3. Apply the D-only entity-resolution procedure in `agent/skills/booksql-accounting-context/SKILL.md` using live Cube metadata and members. `contains` is for bounded candidate discovery or Gold-intended substring semantics; after resolving an exact entity, use `equals` with the exact stored label or a verified unique identifier. Do not aggregate ambiguous or arbitrary partial candidates.
-4. Read and follow `agent/skills/booksql-accounting-context/SKILL.md` when interpreting BookSQL tables, fields, grain, relationships, entity mentions, or payment-event wording. Its D-only treatment changes entity-to-member resolution and the narrowly validated payment-event filter only; it does not change measures, joins, dates, or accounting treatment.
+3. Apply the D-only entity-resolution procedure in `agent/skills/booksql-accounting-context/SKILL.md` using live Cube metadata and members. If a documented normalized name member exists, use exact `equals` on that key and verify the full stored label; otherwise use `contains` only for bounded discovery or Gold-intended substring semantics, then use exact `equals`. Do not aggregate ambiguous or partial candidates.
+4. Read and follow `agent/skills/booksql-accounting-context/SKILL.md` when interpreting BookSQL grain, measures, entity mentions, and payment-event wording. Select `unpaidInvoices` for invoice count with positive `Open_balance`, `classifiedExpenseDebit` for uniquely classified expense debits, and `recognizedRevenueCredit` for uniquely classified income credits. Do not substitute transaction `Amount` for expense or recognized revenue.
 5. Preserve source and Cube-returned values. Do not round source rows or silently apply accounting adjustments. For derived arithmetic, use `decimal_calculator.calculate` on values returned by Cube; keep intermediates unrounded and apply display rounding only when the prompt requests it.
 6. Report the Cube semantic route, relevant filters, and time grain. If no supported match or definition is available, state the limitation rather than guessing.
-7. Preserve all benchmark prompts and Gold queries unchanged. If D's entity resolution, case-insensitive matching, or payment-event classification differs from literal Gold execution, label it as a D treatment effect rather than an exact Gold match. Freeze this D context revision before formal evaluation.
+7. Preserve all benchmark prompts and Gold queries unchanged. If D's entity resolution, metric/grain choice, account classification, or payment-event classification differs from literal Gold execution, label it as a D treatment effect rather than an exact Gold match. Freeze this D context revision before formal evaluation.
+
+8. For classified expense/revenue totals, inspect `accountClassificationIssueLineCount` and unresolved amounts in the same query slice. Account-type conflicts are marked ambiguous and unmapped labels are excluded; do not silently present the classified subtotal as complete when unresolved lines could matter.
+9. A top-N result is not a complete comparison. Report the returned limit or use supported pagination; do not imply that omitted entities were compared.
 
 ## Arithmetic boundary
 

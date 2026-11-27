@@ -6,10 +6,10 @@ This repository is the Nao Multi-project context for BookSQL scenario **D**.
 
 - No direct SQLite or native database connector is declared.
 - BookSQL data is accessed only through `cube_semantic` and the dedicated Cube BookSQL MCP.
-- The D-only `booksql-accounting-context` skill corrects the fact-table grain description, adds general evidence-based Entity Resolution, and distinguishes validated received-payment events from payment-method questions. It preserves exact-versus-substring semantics and the validated case-insensitive behavior; it does not add accounting formulas, joins, or sign policies.
+- The D-only `booksql-accounting-context` skill preserves evidence-based Entity Resolution and distinguishes customer-payment events from payment-method questions. It also routes accounting intent to explicit measures in the shared C/D semantic model, without inventing joins or formulas.
 - `decimal_calculator.calculate` is arithmetic-only over values already returned by Cube.
 - The context explicitly avoids Contoso rules and unsupported assumptions about Amount/Credit/Debit, joins, or business behavior.
-- For exact entity filters, D resolves a stored label through `equals`, then case-insensitive exact matching, then only a validated terminal-descriptor normalization. `contains` is used for bounded candidate discovery, not as an equality substitute. Intentional benchmark substring filters still use `contains` as their final operator. The only descriptor initially enabled is a trailing `partnership`; other titles and legal suffixes remain disabled pending validation.
+- For exact entity filters, D uses a documented normalized name member with `equals` when live metadata exposes it, otherwise resolves a full stored label through bounded candidate discovery and exact `equals`. `contains` is used for candidate discovery, not as an equality substitute; intentional benchmark substring filters still use it as their final operator. The only descriptor initially enabled is a trailing `partnership`; other titles and legal suffixes remain disabled pending validation.
 
 ## Project mapping
 
@@ -29,6 +29,17 @@ Regression checks (use validation examples and do not expose names or expected a
 - **Ambiguous/partial:** longer or partial labels are not treated as equal; multiple plausible entities, unresolved identity, or possibly truncated candidates cause an abstention/clarification rather than aggregation.
 - **Unvalidated suffix:** titles and other legal suffixes (including `Inc.`, `LLC`, `Ltd.`, and `S.A. de C.V.`) are preserved and not stripped.
 
+## Shared measure routing and completeness
+
+- **Outstanding invoices:** transaction grain, `unpaidInvoices` segment (`Transaction_TYPE = invoice` and `Open_balance > 0`); do not substitute `AR_paid` when it conflicts.
+- **Expense:** `BookSQLClassifiedAccountingLines.classifiedExpenseDebit`, positive debit on unambiguously classified expense accounts; not transaction `Amount`.
+- **Recognized revenue:** `recognizedRevenueCredit`, positive credit on unambiguously classified income accounts; not invoice `Amount`.
+- **Invoice value:** `BookSQLTransactionAnalytics.totalInvoiceAmount`, once per invoice transaction; keep distinct from recognized revenue.
+- **Ambiguous account mapping:** inspect `accountClassificationIssueLineCount` and unresolved debit/credit in the same slice. Do not call a classified subtotal complete if unresolved lines could affect it.
+- **Comparison completeness:** identify top-N limits; never present a capped ranking as the full comparison.
+
+These are semantic definitions shared by C and D; the D Context Layer only guides member selection. Original prompts and official Gold queries remain unchanged.
+
 Langfuse audit: for every entity lookup, record the original phrase, candidate labels actually returned, normalization (`none` if none), selected stored label/ID (`none` if unresolved), method, and uniqueness/ambiguity. Tool inputs/results plus this concise final-response note provide the evidence; a candidate-discovery call alone does not prove the final transaction query executed.
 
 ### Payment-event interpretation
@@ -43,4 +54,4 @@ Additional regression checks:
 
 ## Methodology status
 
-Hector approved D-only entity resolution that preserves exact-versus-substring semantics, prioritizes equality, retains the case-insensitive treatment, and initially normalizes only the validated trailing descriptor `partnership`. The payment-event rule is limited to received-payment wording supported by dev Gold and must not be generalized to payment-method or vendor-payment questions. The original prompts and Gold SQL remain unchanged. If resolution, case handling, or payment-event classification changes the result relative to literal Gold execution, record it as a D treatment effect, not an exact Gold match. Freeze this context before formal A/B/C/D runs.
+Hector approved D-only entity resolution that preserves exact-versus-substring semantics and initially normalizes only the validated trailing descriptor `partnership`. Shared semantic measures distinguish outstanding invoices, expense debits, income credits, and invoice totals; the payment-event rule remains limited to supported customer-received wording. Original prompts and Gold SQL remain unchanged. If entity resolution, metric/grain choice, classification, or event filtering changes a result relative to literal Gold execution, record it as a D treatment effect, not an exact Gold match. Freeze this context before formal A/B/C/D runs.

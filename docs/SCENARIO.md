@@ -18,9 +18,18 @@ D-only context -> agent/skills/booksql-accounting-context/SKILL.md
 
 The Nao project does not receive `CUBE_API_SECRET` or direct database credentials. The Cube MCP service owns the Cube API secret. Do not use the Contoso `cube-mcp-private` endpoint.
 
-For exact entity filters, D resolves a stored label through `equals`, then case-insensitive exact matching, then only a validated terminal-descriptor normalization. `contains` is for bounded candidate discovery, not an equality substitute. Intentional benchmark substring filters still use `contains` as their final operator. The initial descriptor allowlist contains only trailing `partnership`; other titles and legal suffixes remain disabled pending validation. The validated BookSQL deployment uses Cube Core v1.8.32 with `CUBEJS_TESSERACT_SQL_PLANNER=false`; a Langfuse trace confirmed that `contains` succeeded on this path, but did not expose generated SQL. Do not claim a specific SQL translation.
+For exact entity filters, D uses a documented normalized name member with `equals` when live metadata exposes it, otherwise resolves the full stored label with bounded candidate discovery and exact `equals`. `contains` is not an equality substitute. Intentional benchmark substring filters still use `contains` as their final operator. The initial descriptor allowlist contains only trailing `partnership`; other titles and legal suffixes remain disabled pending validation. The validated BookSQL deployment uses Cube Core v1.8.32 with `CUBEJS_TESSERACT_SQL_PLANNER=false`; a Langfuse trace confirmed that `contains` succeeded on this path, but did not expose generated SQL. Do not claim a specific SQL translation.
 
 For a question unambiguously asking whether a payment was received from a customer, the D skill also filters the live Cube transaction-type member to its confirmed stored `payment` label using `equals`, alongside the resolved customer and requested date. Dev Gold evidence supports this only for the “receive payment from” wording class (471/471 Gold filters use `transaction_type = 'payment'`). Do not apply this rule to “payment method” questions (606/606 use `sales receipt`) or assume the same mapping for payments to vendors.
+
+## Shared semantic measures
+
+- Outstanding invoices use the transaction-grain `unpaidInvoices` segment (`invoice` plus positive `Open_balance`), not a paid-status flag.
+- Expense uses `classifiedExpenseDebit`; recognized revenue uses `recognizedRevenueCredit`. Both require a unique account-type mapping, and neither is interchangeable with transaction or invoice `Amount`.
+- Invoice totals use `totalInvoiceAmount` at transaction grain. Check unresolved classification counts/amounts before describing classified subtotals as complete.
+- If Cube returns only top-N entities, label the ranking as partial; do not imply a full comparison.
+
+The measure definitions are shared by C and D. D adds interpretation guidance only; original questions and Gold SQL remain unchanged.
 
 ## Fiscal-year convention
 
@@ -30,4 +39,4 @@ The validation split has 150 Gold queries worded “this fiscal year to date” 
 
 ## Methodology status
 
-The D context defines evidence-based entity resolution and the narrowly validated received-payment event filter while preserving exact-versus-substring semantics. It preserves the original questions and Gold SQL. If entity resolution, case-insensitive matching, or payment-event classification changes the result relative to literal Gold execution, report it as a D treatment effect, not an exact Gold match. Freeze this exact context revision before formal evaluation.
+The D context defines evidence-based entity resolution, shared-measure selection, and the narrowly validated received-payment event filter while preserving exact-versus-substring semantics. It preserves the original questions and Gold SQL. If entity resolution, metric/grain choice, account classification, or payment-event classification changes a result relative to literal Gold execution, report it as a D treatment effect, not an exact Gold match. Freeze this exact context revision before formal evaluation.
