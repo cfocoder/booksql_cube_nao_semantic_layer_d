@@ -26,5 +26,11 @@ When forming a query for a relative period, resolve it to explicit absolute ISO 
 
 This is a date-only reference; it does not define a time of day or timezone for `CURRENT_TIMESTAMP`/`now`. Do not invent those values unless the benchmark protocol separately specifies them.
 
+### Fiscal-year interpretation
+
+For this BookSQL benchmark, the fiscal year runs from April 1 through March 31. With `as_of_date = 2022-06-01`, interpret “this fiscal year” and “this fiscal year to date” as 2022-04-01 through 2022-06-01, inclusive. “Last fiscal year” means 2021-04-01 through 2022-03-31, inclusive. Only an explicit request for the full FY 2022–23 uses 2022-04-01 through 2023-03-31.
+
+In the validation split, 150 Gold queries worded “this fiscal year to date” instead cover the full FY through 2023-03-31. Preserve those questions and Gold SQL unchanged, but flag/report them separately as Gold/wording inconsistencies. Do not reproduce that full-year range when answering a genuine “to date” question or silently rewrite Gold.
+
 ## First-turn response requirement
 Always answer the user's question in the current response and provide every requested field; if data is unavailable, state that explicitly without inventing values or deferring the answer to a follow-up.

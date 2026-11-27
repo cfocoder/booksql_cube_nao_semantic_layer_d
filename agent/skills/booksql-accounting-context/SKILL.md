@@ -5,7 +5,7 @@ description: Use when interpreting BookSQL accounting tables and source fields.
 
 # BookSQL accounting context — glossary plus D-only text matching
 
-This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: case-insensitive text matching that preserves exact-versus-substring semantics. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. Do not turn a field label into a formula.
+This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: case-insensitive text matching that preserves exact-versus-substring semantics. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. For benchmark temporal and fiscal-year interpretation, follow the shared policy in the project's `RULES.md`. Do not turn a field label into a formula.
 
 ## Data source and grain
 

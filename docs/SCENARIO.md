@@ -20,6 +20,12 @@ The Nao project does not receive `CUBE_API_SECRET` or direct database credential
 
 For substring semantics (for example, an `instr`-style benchmark filter), D uses Cube `contains` on the appropriate string member with the original prompt text. For exact text equality with uncertain case, D first runs a bounded `contains` candidate query for that member and checks all distinct results. It may use `contains` in the final aggregation only if every candidate is exactly the requested label ignoring case; if any candidate is a longer/partial label, results may be truncated, or no exact candidate exists, it reports the limitation rather than broadening the query. The validated BookSQL deployment uses Cube Core v1.8.32 with `CUBEJS_TESSERACT_SQL_PLANNER=false`. A Langfuse trace confirmed that `contains` succeeded on this path, but did not expose generated SQL; do not claim a specific SQL translation. Do not lowercase the filter value or write raw SQL. This does not change numeric measures, dates, joins, or returned labels.
 
+## Fiscal-year convention
+
+BookSQL fiscal years run from April 1 through March 31, as implied by the authors' [DIN-SQL example](https://github.com/Exploration-Lab/BookSQL/blob/main/GPT/DIN-SQL.py#L1584). With the benchmark reference date 2022-06-01, “this fiscal year” and “this fiscal year to date” mean 2022-04-01 through 2022-06-01; “last fiscal year” means 2021-04-01 through 2022-03-31. A full FY 2022–23, when explicitly requested, means 2022-04-01 through 2023-03-31.
+
+The validation split has 150 Gold queries worded “this fiscal year to date” whose SQL instead covers the full FY through 2023-03-31. Keep questions and official Gold unchanged; flag these cases separately as Gold/wording inconsistencies.
+
 ## Methodology status
 
 The D context defines one approved treatment: case-insensitive text matching while preserving exact-versus-substring semantics. It preserves the original questions and gold queries. If D's filter returns data while literal case-sensitive gold SQL returns none, score and report that as a D treatment effect, not as an exact gold match. Freeze this exact context revision before formal evaluation.
