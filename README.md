@@ -6,10 +6,10 @@ This repository is the Nao Multi-project context for BookSQL scenario **D**.
 
 - No direct SQLite or native database connector is declared.
 - BookSQL data is accessed only through `cube_semantic` and the dedicated Cube BookSQL MCP.
-- The D-only `booksql-accounting-context` skill corrects the fact-table grain description and adds one approved treatment: case-insensitive substring matching where question semantics require it. It does not add accounting formulas, joins, or sign policies.
+- The D-only `booksql-accounting-context` skill corrects the fact-table grain description and adds one approved treatment: case-insensitive text matching that preserves exact-versus-substring semantics. It does not add accounting formulas, joins, or sign policies.
 - `decimal_calculator.calculate` is arithmetic-only over values already returned by Cube.
 - The context explicitly avoids Contoso rules and unsupported assumptions about Amount/Credit/Debit, joins, or business behavior.
-- For substring text filters, D uses Cube's `contains` operator on the appropriate string member with the original prompt text. Cube v1.7.24's SQLite adapter compiles this to case-insensitive `LIKE ... COLLATE NOCASE`; do not lowercase the filter value or use `contains` when exact equality is required. Returned labels and numeric/date semantics remain unchanged.
+- For substring filters, D uses Cube `contains` on the correct member with the original prompt text. For exact text filters with uncertain case, D first discovers candidate labels through a bounded `contains` query and uses `contains` in the final aggregate only if every returned distinct label is an exact case variant of the requested label. Cube v1.7.24's SQLite adapter compiles `contains` to `LIKE ... COLLATE NOCASE`. Do not lowercase the input or silently include partial/longer labels. Returned labels and numeric/date semantics remain unchanged.
 
 ## Project mapping
 
@@ -19,4 +19,4 @@ This repository is the Nao Multi-project context for BookSQL scenario **D**.
 
 ## Methodology status
 
-Hector approved case-insensitive substring matching of text labels as the D-only treatment where substring semantics are intended. The original prompts and gold SQL remain unchanged; if the D `contains` filter yields rows where literal case-sensitive gold SQL returns none, record that as a treatment effect, not an exact gold match. Freeze the updated D context before formal A/B/C/D runs.
+Hector approved case-insensitive text matching as the D-only treatment, while preserving each question's exact-versus-substring semantics. The original prompts and gold SQL remain unchanged; if D's case-insensitive result differs from literal case-sensitive gold SQL, record that as a treatment effect, not an exact gold match. Freeze the updated D context before formal A/B/C/D runs.

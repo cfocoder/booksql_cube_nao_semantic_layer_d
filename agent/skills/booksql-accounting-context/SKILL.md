@@ -5,7 +5,7 @@ description: Use when interpreting BookSQL accounting tables and source fields.
 
 # BookSQL accounting context — glossary plus D-only text matching
 
-This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: case-insensitive substring matching where the question semantics require it. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. Do not turn a field label into a formula.
+This skill is the D-only Context Layer for BookSQL. It summarizes the dataset's table roles and verified schema, and defines one approved D-only behavior: case-insensitive text matching that preserves exact-versus-substring semantics. It does **not** define accounting policies, derived financial metrics, sign conventions, date cutoffs, or any other business rules. Do not turn a field label into a formula.
 
 ## Data source and grain
 
@@ -23,13 +23,13 @@ BookSQL's `accounting.sqlite` contains records for multiple businesses. The phys
 
 Use these exact physical names only in B's SQLite MCP. In D, use only the logical members exposed by Cube metadata.
 
-## Approved D-only case-insensitive substring matching
+## Approved D-only case-insensitive text matching
 
-This is the sole D-specific matching rule. When the question requires substring semantics for a text label (for example, the `instr`-style match on `Account` in the Street vending question), use Cube's native `contains` filter on the semantically appropriate string member returned by live metadata. Preserve the user's original text, including case, spaces, and punctuation; do not lowercase it first. In the deployed Cube v1.7.24 SQLite adapter, `contains` compiles to SQLite `LIKE ... COLLATE NOCASE`, equivalent to a case-insensitive `%value%` substring search. Do not use physical column names, direct SQL, or invented Cube members in D. Keep displayed source labels unchanged; this rule changes only text-filter semantics, not the measure, aggregation, join, date, or accounting interpretation.
+This is the sole D-specific matching rule. Preserve the benchmark's intended exact-versus-substring semantics and use only Cube members returned by live metadata. For substring semantics (for example, an `instr`-style match on `Account`), use Cube's native `contains` filter on the appropriate string member with the user's original text. For exact label equality when casing may differ, first run a bounded candidate-discovery query selecting only that string member and filtering it with `contains` using the original text. Inspect the complete set of distinct returned labels. Use `contains` in the final measure query only if every candidate is an exact case variant of the requested full label; this permits case variants without including longer or partial labels. If there is no exact candidate, any partial/longer candidate, or possible result truncation, report the limitation/ambiguity instead of aggregating a broader set. Cube v1.7.24's SQLite adapter compiles `contains` to `LIKE ... COLLATE NOCASE`. Preserve the original prompt value; do not lowercase it or use physical column names, direct SQL, or invented Cube members. Keep displayed source labels unchanged; this rule does not alter measures, aggregation, joins, dates, or accounting interpretation.
 
-Use `contains` only when substring matching is intended; it can match more than one full label and must not silently replace exact equality. If exact, case-insensitive equality is required but the active Cube model exposes no appropriate case-insensitive exact filter, report that limitation instead of broadening the query. If `contains` fails on the active Cube path, report the actual error and stop; do not switch data routes or silently rewrite the filter. Revalidate the adapter behavior if the Cube version or source changes.
+SQLite `NOCASE` is ASCII-oriented; do not assume it handles non-ASCII case variants without validation. If `contains` fails on the active Cube path, report the actual error and stop; do not switch data routes or silently rewrite the filter. Revalidate the adapter behavior if the Cube version or source changes.
 
-This D-only rule can intentionally return a result where the unchanged, case-sensitive gold SQL returns no rows. Preserve the benchmark prompt and gold SQL; report such a result as the D case-insensitive substring treatment, not as an exact match to the literal gold execution.
+This D-only rule can intentionally return a result where the unchanged, case-sensitive gold SQL returns no rows. Preserve the benchmark prompt and gold SQL; report such a result as the D case-insensitive text-matching treatment, not as an exact match to the literal gold execution.
 
 ## Interpretation safeguards
 
@@ -41,4 +41,4 @@ This D-only rule can intentionally return a result where the unchanged, case-sen
 
 ## Layer boundary
 
-This layer adds case-insensitive substring matching only where the question semantics require it and otherwise remains descriptive. It introduces no accounting calculation or exception policy. Preserve original benchmark prompts and gold queries unchanged; document any answer that differs from literal gold execution because of the D-only matching treatment. Freeze the exact D context revision before formal A/B/C/D evaluation.
+This layer adds case-insensitive text matching while preserving each question's exact-versus-substring semantics; otherwise it remains descriptive. It introduces no accounting calculation or exception policy. Preserve original benchmark prompts and gold queries unchanged; document any answer that differs from literal gold execution because of the D-only matching treatment. Freeze the exact D context revision before formal A/B/C/D evaluation.
