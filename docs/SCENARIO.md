@@ -18,8 +18,8 @@ D-only context -> agent/skills/booksql-accounting-context/SKILL.md
 
 The Nao project does not receive `CUBE_API_SECRET` or direct database credentials. The Cube MCP service owns the Cube API secret. Do not use the Contoso `cube-mcp-private` endpoint.
 
-The D-only context applies case-insensitive matching to textual Cube filters by lowercasing the prompt value and using exact equality on the appropriate Cube string member. It does not change numeric measures, dates, joins, or returned labels. Do not use Cube's `contains` operator for this on the current SQLite-backed Cube; it generates unsupported `ILIKE` SQL.
+When the question requires substring matching (for example, the account phrase in an `instr`-style benchmark query), the D-only context uses Cube's `contains` filter on the semantically appropriate string member and preserves the prompt's original text. The deployed Cube v1.7.24 SQLite adapter compiles `contains` to case-insensitive SQLite `LIKE ... COLLATE NOCASE`; do not lowercase the filter value or write raw SQL. Because `contains` is broader than exact equality, use it only when substring semantics are intended. This does not change numeric measures, dates, joins, or returned labels.
 
 ## Methodology status
 
-The D context now defines one approved treatment: case-insensitive matching of text labels. It preserves the original questions and gold queries. If D's normalized filter returns data while literal case-sensitive gold SQL returns none, score and report that as a D treatment effect, not as an exact gold match. Freeze this exact context revision before formal evaluation.
+The D context defines one approved treatment: case-insensitive substring matching where the question's semantics require it. It preserves the original questions and gold queries. If D's filter returns data while literal case-sensitive gold SQL returns none, score and report that as a D treatment effect, not as an exact gold match. Freeze this exact context revision before formal evaluation.
